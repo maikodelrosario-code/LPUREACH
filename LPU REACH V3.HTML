@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LPU REACH - Connecting Voices, Inspiring Action</title>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
+<style>
+    :root {--crimson:#990000;--gold:#FFD700;--white:#fff;}
+    body{font-family:Arial,sans-serif;margin:0;padding:0;background:var(--white);}
+    header{background:var(--crimson);color:var(--white);padding:20px;text-align:center;border-radius:0 0 15px 15px;}
+    header h1{margin:0;}header p{font-size:1.1em;}
+    main{padding:20px;max-width:900px;margin:auto;}
+    h2{color:var(--crimson);}
+    form{background:#f9f9f9;padding:20px;border-radius:12px;box-shadow:0 2px 6px rgba(0,0,0,0.1);}
+    label{display:block;margin-top:10px;font-weight:bold;}
+    input, select, textarea, button{width:100%;padding:10px;margin-top:5px;border-radius:8px;border:1px solid #ccc;box-sizing:border-box;}
+    button{background:var(--crimson);color:var(--white);border:none;cursor:pointer;margin-top:15px;font-size:1em;}
+    button:hover{background:#b30000;}
+    .ticket-info{background:#e6ffe6;padding:15px;border-radius:10px;margin-top:15px;border:1px solid #00b300;}
+    table{width:100%;border-collapse:collapse;margin-top:15px;}
+    th,td{padding:10px;text-align:left;border-bottom:1px solid #ccc;}
+    @media(max-width:600px){body{padding:10px;}}
+</style>
+</head>
+<body>
+<header>
+<h1>LPU REACH</h1>
+<p>Connecting Voices, Inspiring Action</p>
+<p>Welcome to LPU REACH — your official feedback and assistance center. Whether you want to voice a concern, share feedback, or celebrate great service, we’re here to listen and act.</p>
+</header>
+
+<main>
+<h2>Submit a Concern or Commendation</h2>
+<form id="concernForm">
+<label for="userType">I am a:</label>
+<select id="userType" required>
+    <option value="">Select...</option>
+    <option value="Student">Student</option>
+    <option value="Employee">Employee</option>
+    <option value="Visitor">Visitor</option>
+</select>
+
+<label for="email">Your Email (optional)</label>
+<input type="email" id="email" placeholder="Enter your email or leave blank for anonymous">
+
+<label for="type">Type of Submission</label>
+<select id="type" required>
+    <option value="">Select...</option>
+    <option value="Concern">Concern</option>
+    <option value="Commendation">Commendation</option>
+</select>
+
+<label for="category">Category</label>
+<select id="category" required>
+    <option value="">Select...</option>
+    <option value="Facilities">Facilities</option>
+    <option value="Academic">Academic</option>
+    <option value="HR">HR</option>
+    <option value="Student Affairs">Student Affairs</option>
+    <option value="IT">IT</option>
+</select>
+
+<div id="academicOptions" style="display:none;">
+    <label for="college">College</label>
+    <select id="college">
+        <option value="">Select College...</option>
+        <option value="CITHM">CITHM</option>
+        <option value="CAMP">CAMP</option>
+        <option value="CCAS">CCAS</option>
+        <option value="LIMA">LIMA</option>
+        <option value="SHS">SHS</option>
+    </select>
+
+    <label for="areasOfConcern">Area of Concern</label>
+    <select id="areasOfConcern">
+        <option value="">Select Area...</option>
+        <option value="Curriculum">Curriculum</option>
+        <option value="Faculty">Faculty</option>
+        <option value="Laboratory">Laboratory</option>
+        <option value="Facilities">Facilities</option>
+        <option value="Student Services">Student Services</option>
+        <option value="Exams & Assessment">Exams & Assessment</option>
+    </select>
+</div>
+
+<label for="description">Description</label>
+<textarea id="description" rows="5" placeholder="Describe your concern or commendation..." required></textarea>
+
+<label for="attachment">Attachment (optional)</label>
+<input type="file" id="attachment">
+
+<label><input type="checkbox" id="anonymous"> Submit anonymously</label>
+
+<button type="submit">Submit</button>
+</form>
+
+<div id="ticketDisplay" class="ticket-info" style="display:none;">
+<strong>Your ticket number:</strong> <span id="ticketNumber"></span>
+<p>You can track your concern or commendation using this number.</p>
+</div>
+
+<h2>Admin Dashboard (Demo)</h2>
+<table>
+<thead>
+<tr><th>Ticket #</th><th>User Type</th><th>Type</th><th>Category</th><th>Description</th><th>Status</th></tr>
+</thead>
+<tbody id="ticketTable"></tbody>
+</table>
+
+</main>
+
+<script>
+    // --- Firebase config ---
+    const firebaseConfig = {
+        apiKey: "YOUR_API_KEY",
+        authDomain: "YOUR_AUTH_DOMAIN",
+        projectId: "YOUR_PROJECT_ID",
+        storageBucket: "YOUR_STORAGE_BUCKET",
+        messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+        appId: "YOUR_APP_ID"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    const storage = firebase.storage();
+
+    const category = document.getElementById('category');
+    const academicOptions = document.getElementById('academicOptions');
+    const form = document.getElementById('concernForm');
+    const ticketDisplay = document.getElementById('ticketDisplay');
+    const ticketNumberSpan = document.getElementById('ticketNumber');
+    const ticketTable = document.getElementById('ticketTable');
+
+    let ticketCounter = 1000; // Demo counter
+
+    category.addEventListener('change', ()=>{
+        academicOptions.style.display = category.value==='Academic'?'block':'none';
+    });
+
+    form.addEventListener('submit', async (e)=>{
+        e.preventDefault();
+        const userType = document.getElementById('userType').value;
+        const type = document.getElementById('type').value;
+        const categoryVal = document.getElementById('category').value;
+        const college = document.getElementById('college').value;
+        const area = document.getElementById('areasOfConcern').value;
+        const description = document.getElementById('description').value;
+        const anonymous = document.getElementById('anonymous').checked;
+        const emailInput = document.getElementById('email').value;
+        const file = document.getElementById('attachment').files[0];
+
+        ticketCounter++;
+        const ticketNum = 'LPU'+ticketCounter;
+        ticketNumberSpan.textContent = ticketNum;
+        ticketDisplay.style.display='block';
+
+        let fileUrl = '';
+        if(file){
+            const storageRef = storage.ref().child('attachments/'+ticketNum+'/'+file.name);
+            await storageRef.put(file);
+            fileUrl = await storageRef.getDownloadURL();
+        }
+
+        // Determine user email
+        const userEmail = anonymous ? 'Anonymous' : (emailInput || 'Anonymous');
+
+        // Save ticket in Firestore including userType
+        await db.collection('tickets').doc(ticketNum).set({
+            ticketNum,
+            userType,
+            type,
+            category: categoryVal,
+            college,
+            areaOfConcern: area,
+            description,
+            fileUrl,
+            status: 'Received',
+            user: userEmail,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        form.reset();
+        academicOptions.style.display='none';
+        loadTickets();
+    });
+
+    async function loadTickets(){
+        ticketTable.innerHTML='';
+        const snapshot = await db.collection('tickets').orderBy('timestamp','desc').get();
+        snapshot.forEach(doc=>{
+            const t = doc.data();
+            const row = document.createElement('tr');
+            row.innerHTML=`<td>${t.ticketNum}</td>
+                           <td>${t.userType}</td>
+                           <td>${t.type}</td>
+                           <td>${t.category}${t.category==='Academic'? ' - '+t.college+' ('+t.areaOfConcern+')':''}</td>
+                           <td>${t.description}</td>
+                           <td>${t.status}</td>`;
+            ticketTable.appendChild(row);
+        });
+    }
+
+    loadTickets();
+</script>
+
+</body>
+</html>
